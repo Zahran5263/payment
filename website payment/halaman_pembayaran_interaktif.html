@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NusaPay Checkout - Pembayaran Aman & Instan</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Lucide Icons CDN -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#eff6ff',
+                            100: '#dbeafe',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                            900: '#1e3a8a',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Pengaturan khusus untuk mode cetak (Print Receipt) */
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+            #receipt-modal, #receipt-modal * {
+                visibility: visible;
+            }
+            #receipt-modal {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                background: white !important;
+                box-shadow: none !important;
+            }
+            .no-print {
+                display: none !important;
+            }
+        }
+
+        /* Animasi halus untuk transisi tab */
+        .tab-content {
+            animation: fadeIn 0.3s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans antialiased min-h-screen flex flex-col">
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="fixed top-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- Header / Navbar -->
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-30">
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+                <div class="bg-brand-600 text-white p-2 rounded-xl shadow-sm">
+                    <i data-lucide="shield-check" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <!-- Nama Toko akan otomatis diisi dari konfigurasi JavaScript di bawah --> 
+                    <span id="ui-store-name" class="font-bold text-xl tracking-tight text-slate-900">Zans Shop</span>
+                    <span class="hidden sm:inline-block ml-2 text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-0.5 rounded-full">Official Payment</span>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-4 text-sm">
+                <div class="hidden md:flex items-center gap-1.5 text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-full font-medium">
+                    <i data-lucide="lock" class="w-4 h-4"></i>
+                    <span>Transaksi Aman</span>
+                </div>
+                <div class="text-slate-500 text-xs sm:text-sm">
+                    ID: <span class="font-mono font-semibold text-slate-800" id="header-order-id">#INV-20261116</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-grow max-w-6xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+            
+            <!-- KOLOM KIRI: Data Pembeli & Pilihan Metode Pembayaran (7 Kolom di Desktop) -->
+            <div class="lg:col-span-7 space-y-6">
+                
+                <!-- Informasi Pelanggan -->
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200/80">
+                    <h2 class="text-base font-semibold text-slate-900 mb-4 flex items-center gap-2">
+                        <i data-lucide="user-check" class="w-5 h-5 text-brand-600"></i>
+                        Data Pembeli & Nominal
+                    </h2>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-500 mb-1">Nama Pembeli</label>
+                            <input type="text" id="customer-name" placeholder="Masukkan nama Anda" value="Budi Santoso" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:bg-white transition">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-500 mb-1">Catatan / ID Akun (Opsional)</label>
+                            <input type="text" id="customer-note" placeholder="Contoh: Order Jasa Desain" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:bg-white transition">
+                        </div>
+                    </div>
+
+                    <!-- Mode Input Nominal Custom atau Pilih Paket -->
+                    <div class="mt-4 pt-4 border-t border-slate-100">
+                        <div class="flex items-center justify-between mb-2">
+                            <label class="text-xs font-semibold text-slate-600">Input Nominal Pembayaran (Rp)</label>
+                            <span class="text-[11px] text-brand-600 font-medium">Bisa diubah manual</span>
+                        </div>
+                        <div class="relative flex items-center">
+                            <span class="absolute left-3.5 text-sm font-bold text-slate-500">Rp</span>
+                            <input type="number" id="custom-amount-input" value="150000" min="1000" step="1000" oninput="updateCustomAmount()" class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 text-base focus:outline-none focus:ring-2 focus:ring-brand-500 focus:bg-white transition">
+                        </div>
+                        <!-- Tombol Cepat Nominal -->
+                        <div class="flex flex-wrap gap-2 mt-2.5">
+                            <button type="button" onclick="setQuickAmount(50000)" class="px-3 py-1 text-xs font-medium bg-slate-100 hover:bg-brand-50 hover:text-brand-700 text-slate-600 rounded-lg transition">Rp 50.000</button>
+                            <button type="button" onclick="setQuickAmount(100000)" class="px-3 py-1 text-xs font-medium bg-slate-100 hover:bg-brand-50 hover:text-brand-700 text-slate-600 rounded-lg transition">Rp 100.000</button>
+                            <button type="button" onclick="setQuickAmount(250000)" class="px-3 py-1 text-xs font-medium bg-slate-100 hover:bg-brand-50 hover:text-brand-700 text-slate-600 rounded-lg transition">Rp 250.000</button>
+                            <button type="button" onclick="setQuickAmount(500000)" class="px-3 py-1 text-xs font-medium bg-slate-100 hover:bg-brand-50 hover:text-brand-700 text-slate-600 rounded-lg transition">Rp 500.000</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pilihan Metode Pembayaran: QRIS, DANA, Bank Jago, GoPay, OVO -->
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200/80">
+                    <div class="flex items-center justify-between mb-1">
+                        <h2 class="text-lg font-bold text-slate-900">Pilih Metode Pembayaran</h2>
+                        <div class="flex items-center gap-1.5 text-xs font-semibold text-amber-700 bg-amber-100 px-2.5 py-1 rounded-full">
+                            <i data-lucide="clock" class="w-3.5 h-3.5"></i>
+                            <span id="payment-timer">15:00</span>
+                        </div>
+                    </div>
+                    <p class="text-sm text-slate-500 mb-5">Klik salah satu metode di bawah untuk melihat nomor tujuan transfer.</p>
+
+                    <!-- Grid 5 Tombol Metode Pembayaran -->
+                    <div class="grid grid-cols-2 sm:grid-cols-5 gap-2.5 mb-6" role="tablist">
+                        <!-- 1. QRIS -->
+                        <button type="button" onclick="selectMethod('qris')" id="tab-qris" class="method-tab active flex flex-col items-center justify-center p-3 rounded-xl border-2 border-brand-600 bg-brand-50/60 text-brand-700 font-bold text-xs sm:text-sm transition cursor-pointer">
+                            <span class="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center mb-1.5 font-extrabold text-[10px] tracking-tighter">QRIS</span>
+                            <span>QRIS</span>
+                        </button>
+
+                        <!-- 2. DANA -->
+                        <button type="button" onclick="selectMethod('dana')" id="tab-dana" class="method-tab flex flex-col items-center justify-center p-3 rounded-xl border border-slate-200 hover:border-sky-400 bg-white text-slate-700 font-semibold text-xs sm:text-sm transition cursor-pointer">
+                            <span class="w-8 h-8 rounded-lg bg-sky-500 text-white flex items-center justify-center mb-1.5 font-bold text-xs">DANA</span>
+                            <span>DANA</span>
+                        </button>
+
+                        <!-- 3. Bank Jago -->
+                        <button type="button" onclick="selectMethod('jago')" id="tab-jago" class="method-tab flex flex-col items-center justify-center p-3 rounded-xl border border-slate-200 hover:border-amber-400 bg-white text-slate-700 font-semibold text-xs sm:text-sm transition cursor-pointer">
+                            <span class="w-8 h-8 rounded-lg bg-amber-400 text-slate-900 flex items-center justify-center mb-1.5 font-extrabold text-xs">Jago</span>
+                            <span>Bank Jago</span>
+                        </button>
+
+                        <!-- 4. GoPay -->
+                        <button type="button" onclick="selectMethod('gopay')" id="tab-gopay" class="method-tab flex flex-col items-center justify-center p-3 rounded-xl border border-slate-200 hover:border-emerald-400 bg-white text-slate-700 font-semibold text-xs sm:text-sm transition cursor-pointer">
+                            <span class="w-8 h-8 rounded-lg bg-emerald-500 text-white flex items-center justify-center mb-1.5 font-bold text-xs">Go</span>
+                            <span>GoPay</span>
+                        </button>
+
+                        <!-- 5. OVO -->
+                        <button type="button" onclick="selectMethod('ovo')" id="tab-ovo" class="method-tab col-span-2 sm:col-span-1 flex flex-col items-center justify-center p-3 rounded-xl border border-slate-200 hover:border-purple-400 bg-white text-slate-700 font-semibold text-xs sm:text-sm transition cursor-pointer">
+                            <span class="w-8 h-8 rounded-lg bg-purple-600 text-white flex items-center justify-center mb-1.5 font-extrabold text-xs">OVO</span>
+                            <span>OVO</span>
+                        </button>
+                    </div>
+
+                    <!-- PANEL DETAIL PEMBAYARAN DINAMIS -->
+                    <!-- Tampilan QRIS -->
+                    <div id="panel-qris" class="tab-content bg-slate-50 border border-slate-200 rounded-2xl p-6 flex flex-col items-center text-center">
+                        <span class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Scan QRIS All Payment</span>
+                        <p class="text-sm font-bold text-slate-900 mb-4" id="ui-qris-merchant">NusaPay Store (NMID: ID102600984123)</p>
+
+                        <!-- Wadah Gambar QRIS -->
+                        <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 mb-4">
+                            <img id="ui-qris-image" src="https://placehold.co/240x240/ffffff/0f172a?text=SCAN+QRIS+DISINI" alt="Kode QRIS Pembayaran" class="w-48 h-48 object-contain rounded-lg mx-auto" onerror="this.src='https://placehold.co/240x240/ffffff/0f172a?text=QRIS+CODE'">
+                        </div>
+
+                        <p class="text-xs text-slate-600 max-w-sm">
+                            Mendukung pembayaran dari semua aplikasi E-Wallet (DANA, GoPay, OVO, ShopeePay) dan Mobile Banking (Jago, BCA, Mandiri, BRI, BNI).
+                        </p>
+                    </div>
+
+                    <!-- Tampilan Transfer Nomor (DANA, Bank Jago, GoPay, OVO) -->
+                    <div id="panel-transfer" class="tab-content hidden bg-slate-50 border border-slate-200 rounded-2xl p-6 space-y-4">
+                        <div class="flex items-center justify-between pb-3 border-b border-slate-200">
+                            <div class="flex items-center gap-2.5">
+                                <span id="transfer-badge" class="px-3 py-1 rounded-lg bg-sky-500 text-white font-bold text-xs">DANA</span>
+                                <span class="text-sm font-bold text-slate-800" id="transfer-title">Transfer ke DANA</span>
+                            </div>
+                            <span class="text-xs font-medium text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-full">Bebas Admin</span>
+                        </div>
+
+                        <div>
+                            <span class="block text-xs text-slate-500 mb-1">Nomor Tujuan / Rekening:</span>
+                            <div class="flex items-center justify-between bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
+                                <span id="transfer-number-display" class="font-mono text-lg sm:text-xl font-extrabold tracking-wider text-slate-900">0812-3456-7890</span>
+                                <button type="button" onclick="copyAccountNumber()" class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-brand-600 hover:bg-brand-700 text-white font-semibold text-xs rounded-xl shadow-xs transition cursor-pointer">
+                                    <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                                    Salin Nomor
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-between bg-white px-4 py-3 rounded-xl border border-slate-200/80 text-sm">
+                            <span class="text-slate-500">Atas Nama (Pemilik):</span>
+                            <span id="transfer-owner-display" class="font-bold text-slate-900">Budi Santoso</span>
+                        </div>
+
+                        <div class="text-xs text-slate-500 space-y-1 pt-1">
+                            <p class="font-semibold text-slate-700">Cara Pembayaran:</p>
+                            <p>1. Salin nomor <span class="method-name-inline font-semibold">DANA</span> di atas.</p>
+                            <p>2. Buka aplikasi dan transfer sesuai <strong>Total Pembayaran</strong> di sebelah kanan.</p>
+                            <p>3. Setelah transfer berhasil, klik tombol <strong>Konfirmasi Sudah Bayar</strong>.</p>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- KOLOM KANAN: Ringkasan Pembayaran (5 Kolom di Desktop) -->
+            <div class="lg:col-span-5 lg:sticky lg:top-24 space-y-6">
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200/80">
+                    <h2 class="text-lg font-bold text-slate-900 mb-4 pb-3 border-b border-slate-100">Ringkasan Tagihan</h2>
+
+                    <!-- Input Kode Promo -->
+                    <div class="mb-5">
+                        <label for="promo-input" class="block text-xs font-semibold text-slate-600 mb-2">Kode Promo (Opsional)</label>
+                        <div class="flex gap-2">
+                            <div class="relative flex-grow">
+                                <i data-lucide="tag" class="w-4 h-4 text-slate-400 absolute left-3 top-3"></i>
+                                <input type="text" id="promo-input" placeholder="Coba: HEMAT10" class="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm uppercase font-medium focus:outline-none focus:ring-2 focus:ring-brand-500 focus:bg-white transition">
+                            </div>
+                            <button type="button" onclick="applyPromoCode()" class="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs rounded-xl transition shrink-0 cursor-pointer">
+                                Pakai
+                            </button>
+                        </div>
+                        <div id="promo-feedback" class="mt-2 text-xs hidden"></div>
+                    </div>
+
+                    <!-- Rincian Perhitungan -->
+                    <div class="space-y-2.5 pt-4 border-t border-slate-100 text-sm">
+                        <div class="flex justify-between text-slate-600">
+                            <span>Nominal Transfer</span>
+                            <span class="font-medium text-slate-800" id="subtotal-display">Rp 150.000</span>
+                        </div>
+
+                        <div class="flex justify-between text-slate-600">
+                            <span>Biaya Layanan</span>
+                            <span class="font-medium text-slate-800" id="admin-fee-display">Rp 0</span>
+                        </div>
+
+                        <div id="discount-row" class="flex justify-between text-emerald-600 font-medium hidden">
+                            <span>Diskon (<span id="promo-code-tag">HEMAT10</span>)</span>
+                            <span id="discount-display">- Rp 0</span>
+                        </div>
+
+                        <div class="flex justify-between items-center pt-3.5 mt-2 border-t border-slate-200">
+                            <div>
+                                <span class="font-bold text-slate-900 text-base block">Total Bayar</span>
+                                <span class="text-[11px] text-slate-400">Transfer tepat sesuai nominal</span>
+                            </div>
+                            <span class="font-extrabold text-xl sm:text-2xl text-brand-600" id="total-display">Rp 150.000</span>
+                        </div>
+                    </div>
+
+                    <!-- Tombol Konfirmasi Bayar -->
+                    <button type="button" onclick="processPayment()" id="pay-now-btn" class="w-full mt-6 py-3.5 px-6 bg-brand-600 hover:bg-brand-700 active:scale-[0.99] text-white font-bold text-base rounded-xl shadow-lg shadow-brand-600/25 flex items-center justify-center gap-2 transition cursor-pointer">
+                        <i data-lucide="check-circle" class="w-5 h-5"></i>
+                        <span id="pay-btn-text">Konfirmasi Sudah Bayar</span>
+                    </button>
+
+                    <!-- Tombol Bantuan WhatsApp -->
+                    <a id="ui-whatsapp-help" href="#" target="_blank" rel="noopener noreferrer" class="w-full mt-3 py-2.5 px-4 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold text-xs sm:text-sm rounded-xl border border-emerald-200 flex items-center justify-center gap-2 transition">
+                        <i data-lucide="message-circle" class="w-4 h-4"></i>
+                        <span>Kirim Bukti Transfer via WhatsApp</span>
+                    </a>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-slate-200 py-6 mt-12">
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
+            <p>&copy; <span id="ui-footer-year">2026</span> <span id="ui-footer-store">NusaPay Store</span>. All Rights Reserved.</p>
+            <div class="flex gap-4">
+                <span>QRIS • DANA • Bank Jago • GoPay • OVO</span>
+            </div>
+        </div>
+    </footer>
+
+    <!-- MODAL STRUK PEMBAYARAN BERHASIL (DIGITAL RECEIPT) -->
+    <div id="receipt-modal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4 overflow-y-auto">
+        <div class="bg-white w-full max-w-md rounded-3xl shadow-2xl border border-slate-100 overflow-hidden my-8">
+            
+            <!-- Header Struk -->
+            <div class="bg-emerald-600 text-white p-6 text-center relative">
+                <div class="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-3 backdrop-blur-md">
+                    <div class="w-12 h-12 bg-white text-emerald-600 rounded-full flex items-center justify-center shadow-sm">
+                        <i data-lucide="check" class="w-7 h-7 stroke-[3]"></i>
+                    </div>
+                </div>
+                <h3 class="text-xl font-bold">Konfirmasi Diterima!</h3>
+                <p class="text-emerald-100 text-xs mt-1">Simpan struk ini sebagai bukti pembayaran Anda</p>
+            </div>
+
+            <!-- Body Struk -->
+            <div class="p-6 space-y-5">
+                <div class="text-center pb-4 border-b border-dashed border-slate-200">
+                    <span class="text-xs text-slate-400 uppercase tracking-wider font-semibold">Total Pembayaran</span>
+                    <div class="text-3xl font-extrabold text-slate-900 mt-1" id="receipt-total">Rp 150.000</div>
+                    <span class="inline-block mt-2 px-3 py-0.5 bg-emerald-100 text-emerald-700 font-bold text-xs rounded-full tracking-wide">
+                        MENUNGGU VERIFIKASI / LUNAS
+                    </span>
+                </div>
+
+                <!-- Detail Transaksi -->
+                <div class="space-y-3 text-xs sm:text-sm">
+                    <div class="flex justify-between">
+                        <span class="text-slate-500">No. Referensi</span>
+                        <span class="font-mono font-bold text-slate-800" id="receipt-tx-id">TRX-998123456</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-500">Waktu</span>
+                        <span class="font-medium text-slate-800" id="receipt-date">16 Nov 2026</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-500">Nama Pembeli</span>
+                        <span class="font-medium text-slate-800" id="receipt-name">Budi Santoso</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-500">Metode Tujuan</span>
+                        <span class="font-bold text-brand-600" id="receipt-method">QRIS</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-500">Catatan</span>
+                        <span class="font-medium text-slate-800 text-right" id="receipt-note">-</span>
+                    </div>
+                </div>
+
+                <!-- Tombol Aksi Struk -->
+                <div class="space-y-2.5 pt-2 no-print">
+                    <a id="receipt-wa-btn" href="#" target="_blank" rel="noopener noreferrer" class="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm rounded-xl flex items-center justify-center gap-2 transition">
+                        <i data-lucide="send" class="w-4 h-4"></i>
+                        Kirim Struk ke WhatsApp Admin
+                    </a>
+                    <div class="grid grid-cols-2 gap-2.5">
+                        <button type="button" onclick="window.print()" class="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-xs sm:text-sm rounded-xl flex items-center justify-center gap-2 transition cursor-pointer">
+                            <i data-lucide="printer" class="w-4 h-4"></i>
+                            Cetak / PDF
+                        </button>
+                        <button type="button" onclick="resetCheckout()" class="py-2.5 px-4 bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs sm:text-sm rounded-xl flex items-center justify-center gap-2 transition cursor-pointer">
+                            <i data-lucide="check" class="w-4 h-4"></i>
+                            Tutup
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- PUSAT PENGATURAN DATA TOKO & NOMOR REKENING (EDIT BAGIAN DI BAWAH INI)    -->
+    <!-- ========================================================================= -->
+    <script>
+        /* =====================================================================
+           === EDIT BAGIAN INI: KONFIGURASI NAMA TOKO, REKENING & E-WALLET ===
+           Cukup ubah teks di dalam tanda kutip ('...') sesuai data Anda!
+           ===================================================================== */
+        const PENGATURAN_PEMBAYARAN = {
+            // 1. EDIT NAMA TOKO / BRAND ANDA DI SINI:
+            namaToko: 'NusaPay Digital Store',
+
+            // 2. EDIT NAMA PEMILIK REKENING (Atas Nama) DI SINI:
+            namaPemilikRekening: 'A/N MUH. ZAHRAN APRIANTO',
+
+            // 3. EDIT BIAYA ADMIN TAMBAHAN (Isi 0 jika gratis biaya admin):
+            biayaAdmin: 0,
+
+            // 4. EDIT NOMOR WHATSAPP ADMIN (Gunakan format 628..., tanpa tanda + atau 0 di depan):
+            nomorWhatsAppAdmin: '6288977947098',
+
+            // 5. EDIT PENGATURAN QRIS (Ganti linkGambar dengan URL foto QRIS Anda):
+            qris: {
+                namaMerchant: 'Zans Shop (NMID: ID102600984123)',
+                linkGambar: 'https://cdn.phototourl.com/anon/2026-11-16-eecfbeca-c1b5-494d-97df-0c990a70265c.jpg'
+            },
+
+            // 6. EDIT NOMOR E-WALLET & REKENING BANK JAGO ANDA DI SINI:
+            metodeTransfer: {
+                dana: {
+                    label: 'DANA',
+                    nomor: '081222206405', // <-- Ganti dengan nomor DANA Anda
+                    warnaBadge: 'bg-sky-500 text-white'
+                },
+                jago: {
+                    label: 'Bank Jago',
+                    nomor: '505302504604', // <-- Ganti dengan nomor rekening Bank Jago Anda
+                    warnaBadge: 'bg-amber-400 text-slate-900'
+                },
+                gopay: {
+                    label: 'GoPay',
+                    nomor: 'kosong', // <-- Ganti dengan nomor GoPay Anda
+                    warnaBadge: 'bg-emerald-500 text-white'
+                },
+                ovo: {
+                    label: 'OVO',
+                    nomor: 'kosong', // <-- Ganti dengan nomor OVO Anda
+                    warnaBadge: 'bg-purple-600 text-white'
+                }
+            }
+        };
+        /* =====================================================================
+           === BATAS AKHIR BAGIAN EDIT. JANGAN UBAH KODE DI BAWAH KECUALI PAHAM ===
+           ===================================================================== */
+
+        // Inisialisasi ikon Lucide
+        lucide.createIcons();
+
+        // State Aplikasi
+        const state = {
+            amount: 150000,
+            discountRate: 0,
+            promoCode: '',
+            selectedMethod: 'qris'
+        };
+
+        // Terapkan data dari PENGATURAN_PEMBAYARAN ke tampilan HTML saat halaman dibuka
+        function initStoreConfig() {
+            document.getElementById('ui-store-name').textContent = PENGATURAN_PEMBAYARAN.namaToko;
+            document.getElementById('ui-footer-store').textContent = PENGATURAN_PEMBAYARAN.namaToko;
+            document.getElementById('ui-qris-merchant').textContent = PENGATURAN_PEMBAYARAN.qris.namaMerchant;
+            document.getElementById('ui-qris-image').src = PENGATURAN_PEMBAYARAN.qris.linkGambar;
+            document.getElementById('admin-fee-display').textContent = formatRupiah(PENGATURAN_PEMBAYARAN.biayaAdmin);
+            updateWhatsAppLinks();
+        }
+
+        // Format angka ke Rupiah
+        function formatRupiah(angka) {
+            return 'Rp ' + Math.round(angka).toLocaleString('id-ID');
+        }
+
+        // Update nominal dari input manual
+        function updateCustomAmount() {
+            const val = parseFloat(document.getElementById('custom-amount-input').value);
+            state.amount = isNaN(val) || val < 0 ? 0 : val;
+            calculateTotals();
+        }
+
+        // Set nominal dari tombol cepat
+        function setQuickAmount(nominal) {
+            document.getElementById('custom-amount-input').value = nominal;
+            state.amount = nominal;
+            calculateTotals();
+        }
+
+        // Kalkulasi total tagihan
+        function calculateTotals() {
+            const subtotal = state.amount;
+            const adminFee = PENGATURAN_PEMBAYARAN.biayaAdmin;
+            const discountAmount = subtotal * state.discountRate;
+            const grandTotal = Math.max(0, subtotal + adminFee - discountAmount);
+
+            document.getElementById('subtotal-display').textContent = formatRupiah(subtotal);
+            document.getElementById('total-display').textContent = formatRupiah(grandTotal);
+
+            const discountRow = document.getElementById('discount-row');
+            if (discountAmount > 0) {
+                discountRow.classList.remove('hidden');
+                document.getElementById('promo-code-tag').textContent = state.promoCode;
+                document.getElementById('discount-display').textContent = '- ' + formatRupiah(discountAmount);
+            } else {
+                discountRow.classList.add('hidden');
+            }
+
+            updateWhatsAppLinks();
+            return { subtotal, adminFee, discountAmount, grandTotal };
+        }
+
+        // Update link WhatsApp otomatis dengan detail pesanan
+        function updateWhatsAppLinks() {
+            const customerName = document.getElementById('customer-name').value.trim() || 'Pembeli';
+            const totalText = document.getElementById('total-display').textContent;
+            const methodLabel = state.selectedMethod === 'qris'
+                ? 'QRIS'
+                : PENGATURAN_PEMBAYARAN.metodeTransfer[state.selectedMethod].label;
+
+            const pesan = `Halo admin *${PENGATURAN_PEMBAYARAN.namaToko}*, saya *${customerName}* ingin konfirmasi pembayaran sebesar *${totalText}* melalui metode *${methodLabel}*. Berikut saya lampirkan bukti transfernya:`;
+            const waUrl = `https://wa.me/${PENGATURAN_PEMBAYARAN.nomorWhatsAppAdmin}?text=${encodeURIComponent(pesan)}`;
+
+            document.getElementById('ui-whatsapp-help').href = waUrl;
+            document.getElementById('receipt-wa-btn').href = waUrl;
+        }
+
+        // Logika Kode Promo
+        function applyPromoCode() {
+            const code = document.getElementById('promo-input').value.trim().toUpperCase();
+            const feedbackEl = document.getElementById('promo-feedback');
+            feedbackEl.classList.remove('hidden', 'text-emerald-600', 'text-rose-600');
+
+            if (code === 'HEMAT10') {
+                state.discountRate = 0.10;
+                state.promoCode = 'HEMAT10';
+                feedbackEl.textContent = '✓ Kode promo HEMAT10 berhasil diterapkan (Diskon 10%)!';
+                feedbackEl.classList.add('text-emerald-600', 'font-medium');
+                showToast('Promo HEMAT10 diterapkan!', 'success');
+            } else if (code === 'DISKON20') {
+                state.discountRate = 0.20;
+                state.promoCode = 'DISKON20';
+                feedbackEl.textContent = '✓ Kode promo DISKON20 berhasil diterapkan (Diskon 20%)!';
+                feedbackEl.classList.add('text-emerald-600', 'font-medium');
+                showToast('Promo DISKON20 diterapkan!', 'success');
+            } else {
+                state.discountRate = 0;
+                state.promoCode = '';
+                feedbackEl.textContent = '✕ Kode promo tidak valid (Coba: HEMAT10 atau DISKON20).';
+                feedbackEl.classList.add('text-rose-600');
+            }
+            calculateTotals();
+        }
+
+        // Pilih Metode Pembayaran (QRIS, DANA, Jago, GoPay, OVO)
+        function selectMethod(method) {
+            state.selectedMethod = method;
+
+            // Reset semua tombol tab
+            document.querySelectorAll('.method-tab').forEach(btn => {
+                btn.classList.remove('border-2', 'border-brand-600', 'bg-brand-50/60', 'text-brand-700', 'font-bold');
+                btn.classList.add('border', 'border-slate-200', 'bg-white', 'text-slate-700', 'font-semibold');
+            });
+
+            // Aktifkan tombol tab yang diklik
+            const activeTab = document.getElementById(`tab-${method}`);
+            activeTab.classList.remove('border', 'border-slate-200', 'bg-white', 'text-slate-700', 'font-semibold');
+            activeTab.classList.add('border-2', 'border-brand-600', 'bg-brand-50/60', 'text-brand-700', 'font-bold');
+
+            const panelQris = document.getElementById('panel-qris');
+            const panelTransfer = document.getElementById('panel-transfer');
+
+            if (method === 'qris') {
+                panelQris.classList.remove('hidden');
+                panelTransfer.classList.add('hidden');
+            } else {
+                panelQris.classList.add('hidden');
+                panelTransfer.classList.remove('hidden');
+
+                const dataMetode = PENGATURAN_PEMBAYARAN.metodeTransfer[method];
+                const badgeEl = document.getElementById('transfer-badge');
+                badgeEl.textContent = dataMetode.label;
+                badgeEl.className = `px-3 py-1 rounded-lg font-bold text-xs ${dataMetode.warnaBadge}`;
+
+                document.getElementById('transfer-title').textContent = `Transfer ke ${dataMetode.label}`;
+                document.getElementById('transfer-number-display').textContent = dataMetode.nomor;
+                document.getElementById('transfer-owner-display').textContent = PENGATURAN_PEMBAYARAN.namaPemilikRekening;
+                document.querySelectorAll('.method-name-inline').forEach(el => el.textContent = dataMetode.label);
+            }
+
+            updateWhatsAppLinks();
+        }
+
+        // Salin Nomor Rekening / E-Wallet
+        function copyAccountNumber() {
+            const dataMetode = PENGATURAN_PEMBAYARAN.metodeTransfer[state.selectedMethod];
+            const cleanNumber = dataMetode.nomor.replace(/[-\s]/g, '');
+
+            const tempInput = document.createElement('textarea');
+            tempInput.value = cleanNumber;
+            document.body.appendChild(tempInput);
+            tempInput.select();
+            document.execCommand('copy');
+            document.body.removeChild(tempInput);
+
+            showToast(`Nomor ${dataMetode.label} (${cleanNumber}) berhasil disalin!`, 'success');
+        }
+
+        // Countdown Timer 15 Menit
+        let timeLeft = 15 * 60;
+        function startTimer() {
+            const timerEl = document.getElementById('payment-timer');
+            setInterval(() => {
+                if (timeLeft <= 0) {
+                    timerEl.textContent = '00:00';
+                    return;
+                }
+                timeLeft--;
+                const mins = Math.floor(timeLeft / 60).toString().padStart(2, '0');
+                const secs = (timeLeft % 60).toString().padStart(2, '0');
+                timerEl.textContent = `${mins}:${secs}`;
+            }, 1000);
+        }
+
+        // Proses Konfirmasi Pembayaran
+        function processPayment() {
+            const customerName = document.getElementById('customer-name').value.trim();
+            if (!customerName) {
+                showToast('Harap isi nama pembeli terlebih dahulu.', 'error');
+                document.getElementById('customer-name').focus();
+                return;
+            }
+            if (state.amount <= 0) {
+                showToast('Masukkan nominal pembayaran yang valid.', 'error');
+                return;
+            }
+
+            const payBtn = document.getElementById('pay-now-btn');
+            const payBtnText = document.getElementById('pay-btn-text');
+            payBtn.disabled = true;
+            payBtnText.innerHTML = `<span class="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></span> Membuat Struk...`;
+
+            setTimeout(() => {
+                payBtn.disabled = false;
+                payBtnText.textContent = 'Konfirmasi Sudah Bayar';
+                showDigitalReceipt();
+            }, 1000);
+        }
+
+        // Tampilkan Modal Struk Digital
+        function showDigitalReceipt() {
+            const totals = calculateTotals();
+            const customerName = document.getElementById('customer-name').value.trim();
+            const customerNote = document.getElementById('customer-note').value.trim() || '-';
+            const methodLabel = state.selectedMethod === 'qris'
+                ? 'QRIS'
+                : PENGATURAN_PEMBAYARAN.metodeTransfer[state.selectedMethod].label;
+
+            const randomTx = 'TRX-' + Math.floor(100000000 + Math.random() * 900000000);
+            const now = new Date();
+            const dateStr = now.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) + ', ' +
+                            now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+
+            document.getElementById('receipt-total').textContent = formatRupiah(totals.grandTotal);
+            document.getElementById('receipt-tx-id').textContent = randomTx;
+            document.getElementById('receipt-date').textContent = dateStr;
+            document.getElementById('receipt-name').textContent = customerName;
+            document.getElementById('receipt-method').textContent = methodLabel;
+            document.getElementById('receipt-note').textContent = customerNote;
+
+            updateWhatsAppLinks();
+            document.getElementById('receipt-modal').classList.remove('hidden');
+            showToast('Struk pembayaran berhasil dibuat!', 'success');
+        }
+
+        function resetCheckout() {
+            document.getElementById('receipt-modal').classList.add('hidden');
+            document.getElementById('header-order-id').textContent = '#INV-' + Math.floor(10000000 + Math.random() * 90000000);
+        }
+
+        // Notifikasi Toast
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            let bgClass = type === 'success' ? 'bg-emerald-600 text-white' : (type === 'error' ? 'bg-rose-600 text-white' : 'bg-slate-800 text-white');
+            let iconName = type === 'success' ? 'check-circle' : (type === 'error' ? 'alert-circle' : 'info');
+
+            toast.className = `${bgClass} px-4 py-3 rounded-xl shadow-lg flex items-center gap-2.5 text-xs sm:text-sm font-medium pointer-events-auto transition-all duration-300`;
+            toast.innerHTML = `<i data-lucide="${iconName}" class="w-4 h-4 shrink-0"></i><span>${message}</span>`;
+
+            container.appendChild(toast);
+            lucide.createIcons();
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', '-translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // Event listener saat nama pembeli berubah agar link WA ikut terupdate
+        document.getElementById('customer-name').addEventListener('input', updateWhatsAppLinks);
+
+        // Jalankan saat halaman selesai dimuat
+        window.addEventListener('DOMContentLoaded', () => {
+            initStoreConfig();
+            calculateTotals();
+            startTimer();
+        });
+    </script>
+</body>
+</html>
